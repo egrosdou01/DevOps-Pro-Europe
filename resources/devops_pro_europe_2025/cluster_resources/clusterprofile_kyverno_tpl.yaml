@@ -1,0 +1,52 @@
+---
+apiVersion: config.projectsveltos.io/v1beta1
+kind: ClusterProfile
+metadata:
+  name: install-kyverno-and-policies
+spec:
+  clusterSelector:
+    matchExpressions:
+    - {key: env, operator: In, values: [prod, test]}
+  syncMode: Continuous
+  templateResourceRefs:
+  - resource:
+      apiVersion: lib.projectsveltos.io/v1beta1
+      kind: SveltosCluster
+      name: "{{ .Cluster.metadata.name }}"
+    identifier: Cluster
+  syncMode: Continuous
+  helmCharts:
+    - repositoryURL: https://kyverno.github.io/kyverno/
+      repositoryName: kyverno
+      chartName: kyverno/kyverno
+      chartVersion: |-
+        {{$version := index .Cluster.metadata.labels "projectsveltos.io/k8s-version" }}{{if eq $version "v1.29.8"}}v3.3.8
+        {{else}}v3.4.1
+        {{end}}
+      releaseName: kyverno-latest
+      releaseNamespace: kyverno
+      helmChartAction: Install
+  validateHealths:
+    - name: deployment-health
+      featureID: Helm
+      group: "apps"
+      version: "v1"
+      kind: "Deployment"
+      namespace: kyverno
+      script: |
+        function evaluate()
+          local hs = {healthy = false, message = "Available replicas not match requested replicas"}
+          if obj.status and obj.status.availableReplicas ~= nil and obj.status.availableReplicas == obj.spec.replicas then
+            hs.healthy = true
+          end
+          return hs
+        end
+  policyRefs:
+    - kind: GitRepository
+      name: flux-system
+      namespace: flux-system
+      path: |-
+        {{$path := index .Cluster.metadata.labels "projectsveltos.io/k8s-version" }}{{- if eq $path "v1.29.8"}}kyverno-policies/prod
+        {{- else}}kyverno-policies/test
+        {{- end}}
+      deploymentType: Remote

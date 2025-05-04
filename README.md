@@ -1,2 +1,2 @@
 # DevOps-Pro-Europe
-DevOps Pro Europe Resources
+DevOps Pro Europe Conference Resources
